@@ -2,6 +2,11 @@
 name = "ft6x36"
 version = "0.1.0"
 edition = "2021"
+categories = ["embedded", "hardware-support"]
+description = "Rust driver for Ft6x36 touch screen"
+repository = "https://github.com/pyaillet/ft6x36-rs"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
