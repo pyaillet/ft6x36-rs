@@ -1,21 +1,28 @@
 #![no_std]
+#![doc = include_str!("../README.md")]
 
-use embedded_hal::blocking::{
-    delay::DelayMs,
-    i2c::{Write, WriteRead},
-};
+use embedded_hal::blocking::i2c::{Write, WriteRead};
 
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 const DEFAULT_FT6X36_ADDRESS: u8 = 0x38;
 const REPORT_SIZE: usize = 0x0f;
 
+/// Driver representation holding:
+///
+/// - The I2C Slave address of the device
+/// - The I2C Bus used to communicate with the device
+/// - Some information on the device when it's initialized
 pub struct Ft6x36<I2C> {
+    /// Address of the I2C Slave device
     address: u8,
+    /// I2C bus used to communicate with the device
     i2c: I2C,
+    /// Information of the device when it's initialized
     info: Option<Ft6x36Info>,
 }
 
+/*
 pub struct Point {
     pub x: u8,
     pub y: u8,
@@ -38,7 +45,6 @@ pub struct SwipeInfo {
     pub point: Point,
 }
 
-/*
 pub enum TouchEvent {
     NoEvent,
     TouchOnePoint(Point),
@@ -48,10 +54,24 @@ pub enum TouchEvent {
 }
 */
 
+/// Device mode
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, FromPrimitive, IntoPrimitive)]
+pub enum DeviceMode {
+    /// Working mode
+    #[default]
+    Working = 0b000,
+    /// Factory mode
+    Factory = 0b100,
+}
+
+/// Touch event full raw report
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct TouchEvent {
-    device_mode: u8,
-    gesture_id: u8,
+    /// Device mode
+    device_mode: DeviceMode,
+    gesture_id: GestureId,
     touch_device_status: u8,
     p1xh: u8,
     p1xl: u8,
@@ -67,37 +87,72 @@ pub struct TouchEvent {
     p2misc: u8,
 }
 
+/// Settings for gesture detection
+/// (Currently not working)
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+pub struct GestureParams {
+    minimum_angle: u8,
+    offset_left_right: u8,
+    offset_up_down: u8,
+    dist_left_right: u8,
+    dist_up_down: u8,
+    dist_zoom: u8,
+}
+
 macro_rules! get_offset {
     ($first:expr, $relative_offset:expr) => {
         ($relative_offset as u8 - $first as u8) as usize
     };
 }
 
+/// Documented registers of the device
+#[allow(dead_code)]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, IntoPrimitive)]
 enum Reg {
     DeviceMode = 0x00,
+
     GestId = 0x01,
     TouchDeviceStatus = 0x02,
+
     P1XH = 0x03,
     P1XL = 0x04,
     P1YH = 0x05,
     P1YL = 0x06,
     P1Weight = 0x07,
     P1Misc = 0x08,
+
     P2XH = 0x09,
     P2XL = 0x0A,
     P2YH = 0x0B,
     P2YL = 0x0C,
     P2Weight = 0x0D,
     P2Misc = 0x0E,
+
+    TouchDetectionThreshold = 0x80,
+    TouchFilterCoeff = 0x85,
+    ControlMode = 0x86,
+    TimeActiveMonitor = 0x87,
+    PeriodActive = 0x88,
+    PeriodMonitor = 0x89,
+
+    GestRadianValue = 0x91,
+    GestOffsetLeftRight = 0x92,
+    GestOffsetUpDown = 0x93,
+    GestDistLeftRight = 0x94,
+    GestDistUpDown = 0x95,
+    GestDistZoom = 0x96,
+
     ChipId = 0xA3,
     FirmwareId = 0xA6,
     PanelId = 0xA8,
     ReleaseCode = 0xAF,
+
     OperatingMode = 0xBC,
 }
 
+/// Known and detected gestures (currently not working though)
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive)]
 pub enum GestureId {
@@ -111,6 +166,7 @@ pub enum GestureId {
     ZoomOut = 0x49,
 }
 
+/// Enum describing known chips
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive)]
 pub enum ChipId {
@@ -121,11 +177,17 @@ pub enum ChipId {
     Ft6236u = 0x64,
 }
 
+/// A structure giving information on the current device
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct Ft6x36Info {
+    /// ChipId, known chips are: Ft6206, Ft6236 and Ft6236u
     chip_id: ChipId,
+    /// Firmware Id
     firmware_id: u8,
+    /// Panel id
     panel_id: u8,
+    /// Version of the release code
     release_code: u8,
 }
 
@@ -133,6 +195,16 @@ impl<I2C, E> Ft6x36<I2C>
 where
     I2C: Write<Error = E> + WriteRead<Error = E>,
 {
+    /// Create a new Ft6x36 device with the default slave address
+    ///
+    /// # Arguments
+    ///
+    /// - `i2c` I2C bus used to communicate with the device
+    ///
+    /// # Returns
+    ///
+    /// - [Ft6x36 driver](Ft6x36) created
+    ///
     pub fn new(i2c: I2C) -> Self {
         Self {
             address: DEFAULT_FT6X36_ADDRESS,
@@ -141,6 +213,11 @@ where
         }
     }
 
+    /// Initialize the device
+    ///
+    /// Currently it only gather informations on the device and initialize the
+    /// [info structure of the driver](Ft6x36Info)
+    ///
     pub fn init(&mut self) -> Result<(), E> {
         let mut buf: [u8; 13] = [0; 13];
         self.i2c
@@ -158,14 +235,19 @@ where
         Ok(())
     }
 
+    /// Get the full raw report of touch events
+    ///
+    /// # Returns
+    ///
+    /// - [TouchEvent](TouchEvent) the full TouchEvent report
     pub fn get_touch_event(&mut self) -> Result<TouchEvent, E> {
         let mut report: [u8; REPORT_SIZE] = [0; REPORT_SIZE];
         self.i2c
             .write_read(self.address, &[Reg::DeviceMode.into()], &mut report)?;
 
         Ok(TouchEvent {
-            device_mode: report[0],
-            gesture_id: report[1],
+            device_mode: report[0].into(),
+            gesture_id: report[1].into(),
             touch_device_status: report[2],
             p1xh: report[3],
             p1xl: report[4],
@@ -182,6 +264,158 @@ where
         })
     }
 
+    /// Get the current gesture detection parameters
+    /// (Currently not working)
+    pub fn get_gesture_params(&mut self) -> Result<GestureParams, E> {
+        let mut buf: [u8; 6] = [0; 6];
+
+        self.i2c
+            .write_read(self.address, &[Reg::GestRadianValue.into()], &mut buf)?;
+        Ok(GestureParams {
+            minimum_angle: buf[0],
+            offset_left_right: buf[1],
+            offset_up_down: buf[2],
+            dist_left_right: buf[3],
+            dist_up_down: buf[4],
+            dist_zoom: buf[5],
+        })
+    }
+
+    /// Set the touch detection threshold
+    ///
+    /// # Arguments
+    ///
+    /// - `value` the threshold value
+    pub fn set_touch_threshold(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::TouchDetectionThreshold.into(), value])
+    }
+
+    /// Set the touch filter coefficient
+    ///
+    /// # Arguments
+    ///
+    /// - `value` the touch filter coefficient
+    pub fn set_touch_filter_coefficient(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::TouchFilterCoeff.into(), value])
+    }
+
+    /// Set the control mode
+    ///
+    /// - 0: Will keep the Active mode when there is no touching
+    /// - 1: Switching from Active mode to Monitor mode automatically when there
+    ///   is no touching and the TimeActiveMonitor period is elapsed
+    ///
+    /// # Arguments
+    ///
+    /// - `value` the control mode
+    pub fn set_control_mode(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::ControlMode.into(), value])
+    }
+
+    /// Set the period used to switch from Active to Monitor mode
+    ///
+    /// # Arguments
+    ///
+    /// - `value` the switching period
+    pub fn set_time_active_monitor(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::TimeActiveMonitor.into(), value])
+    }
+
+    /// Set the report rate in Active mode
+    ///
+    /// # Arguments
+    ///
+    /// - `value` the report rate in Active mode
+    pub fn set_period_active(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::PeriodActive.into(), value])
+    }
+
+    /// Set the report rate in Monitor mode
+    ///
+    /// # Arguments
+    ///
+    /// - `value` the report rate in Monitor mode
+    pub fn set_period_monitor(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::PeriodMonitor.into(), value])
+    }
+
+    /// Set the minimum angle for gesture detection
+    ///
+    /// # Arguments
+    ///
+    /// - `value` The value of the minimum allowed angle while rotating gesture
+    ///   mode
+    pub fn set_gesture_minimum_angle(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::GestRadianValue.into(), value])
+    }
+
+    /// Set the maximum offset for detecting Moving left and Moving right gestures
+    ///
+    /// # Arguments
+    ///
+    /// - `value` The value of the maximum offset for detecting Moving left and Moving right gestures
+    ///   mode
+    pub fn set_gesture_offset_left_right(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::GestOffsetLeftRight.into(), value])
+    }
+
+    /// Set the maximum offset for detecting Moving up and Moving down gestures
+    ///
+    /// # Arguments
+    ///
+    /// - `value` The value of the maximum offset for detecting Moving up and Moving down gestures
+    ///   mode
+    pub fn set_gesture_offset_up_down(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::GestOffsetUpDown.into(), value])
+    }
+
+    /// Set the minimum distance for detecting Moving up and Moving down gestures
+    ///
+    /// # Arguments
+    ///
+    /// - `value` The value of the minimum distance for detecting Moving up and Moving down gestures
+    ///   mode
+    pub fn set_gesture_distance_up_down(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::GestDistUpDown.into(), value])
+    }
+
+    /// Set the minimum distance for detecting Moving left and Moving right gestures
+    ///
+    /// # Arguments
+    ///
+    /// - `value` The value of the minimum distance for detecting Moving left and Moving right
+    ///   gestures mode
+    pub fn set_gesture_distance_left_right(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::GestDistLeftRight.into(), value])
+    }
+
+    /// Set the minimum distance for detecting zoom gestures
+    ///
+    /// # Arguments
+    ///
+    /// - `value` The value of the minimum distance for detecting zoom gestures mode
+    pub fn set_gesture_distance_zoom(&mut self, value: u8) -> Result<(), E> {
+        self.i2c
+            .write(self.address, &[Reg::GestDistZoom.into(), value])
+    }
+
+    /// Get device informations
+    ///
+    /// # Returns
+    ///
+    /// - `None` if the device is not initialized
+    /// - [`Some(Ft6x36Info)`](Ft6x36Info) otherwise
     pub fn get_info(&self) -> Option<Ft6x36Info> {
         self.info
     }
