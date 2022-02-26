@@ -22,10 +22,18 @@ pub struct Ft6x36<I2C> {
     info: Option<Ft6x36Info>,
 }
 
-/*
+#[derive(Copy, Clone, Debug)]
 pub struct Point {
-    pub x: u8,
-    pub y: u8,
+    pub x: u16,
+    pub y: u16,
+}
+
+impl From<&[u8]> for Point {
+    fn from(data: &[u8]) -> Self {
+        let x: u16 = (data[0] as u16 & 0x0f << 8) | (data[1] as u16);
+        let y: u16 = (data[2] as u16 & 0x0f << 8) | (data[3] as u16);
+        Self { x, y }
+    }
 }
 
 pub enum Direction {
@@ -52,7 +60,6 @@ pub enum TouchEvent {
     Swipe(Direction, SwipeInfo),
     Zoom(Zoom),
 }
-*/
 
 /// Device mode
 #[repr(u8)]
@@ -65,26 +72,36 @@ pub enum DeviceMode {
     Factory = 0b100,
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, IntoPrimitive)]
+pub enum TouchType {
+    Press = 0b00,
+    Release = 0b01,
+    Contact = 0b10,
+    Invalid = 0b11,
+}
+
+impl From<u8> for TouchType {
+    fn from(data: u8) -> Self {
+        match (data >> 6) & 0b0000_0011 {
+            0b00 => TouchType::Press,
+            0b01 => TouchType::Release,
+            0b10 => TouchType::Contact,
+            _ => TouchType::Invalid,
+        }
+    }
+}
+
 /// Touch event full raw report
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct TouchEvent {
+pub struct RawTouchEvent {
     /// Device mode
     device_mode: DeviceMode,
     gesture_id: GestureId,
-    touch_device_status: u8,
-    p1xh: u8,
-    p1xl: u8,
-    p1yh: u8,
-    p1yl: u8,
-    p1weight: u8,
-    p1misc: u8,
-    p2xh: u8,
-    p2xl: u8,
-    p2yh: u8,
-    p2yl: u8,
-    p2weight: u8,
-    p2misc: u8,
+    touch_type: TouchType,
+    p1: Option<Point>,
+    p2: Option<Point>,
 }
 
 /// Settings for gesture detection
@@ -240,27 +257,28 @@ where
     /// # Returns
     ///
     /// - [TouchEvent](TouchEvent) the full TouchEvent report
-    pub fn get_touch_event(&mut self) -> Result<TouchEvent, E> {
+    pub fn get_touch_event(&mut self) -> Result<RawTouchEvent, E> {
         let mut report: [u8; REPORT_SIZE] = [0; REPORT_SIZE];
         self.i2c
             .write_read(self.address, &[Reg::DeviceMode.into()], &mut report)?;
 
-        Ok(TouchEvent {
+        let touch_type: TouchType = report[3].into();
+
+        let (p1, p2) = match report[2] {
+            1 => (Some(Point::from(&report[3..7])), None),
+            2 => (
+                Some(Point::from(&report[3..7])),
+                Some(Point::from(&report[9..13])),
+            ),
+            _ => (None, None),
+        };
+
+        Ok(RawTouchEvent {
             device_mode: report[0].into(),
             gesture_id: report[1].into(),
-            touch_device_status: report[2],
-            p1xh: report[3],
-            p1xl: report[4],
-            p1yh: report[5],
-            p1yl: report[6],
-            p1weight: report[7],
-            p1misc: report[8],
-            p2xh: report[9],
-            p2xl: report[0xa],
-            p2yh: report[0xb],
-            p2yl: report[0xc],
-            p2weight: report[0xd],
-            p2misc: report[0xe],
+            touch_type,
+            p1,
+            p2,
         })
     }
 
