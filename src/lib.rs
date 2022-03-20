@@ -23,6 +23,15 @@ pub struct Ft6x36<I2C> {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub struct Diagnostics {
+    power_mode: u8,
+    g_mode: u8,
+    lib_version: u16,
+    state: u8,
+    control_mode: u8
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct Point {
     pub x: u16,
     pub y: u16,
@@ -161,7 +170,12 @@ enum Reg {
     GestDistUpDown = 0x95,
     GestDistZoom = 0x96,
 
+    LibVersionH = 0xA1,
+    LibVersionL = 0xA2,
     ChipId = 0xA3,
+
+    GMode = 0xA4,
+    PowerMode = 0xA5,
     FirmwareId = 0xA6,
     PanelId = 0xA8,
     ReleaseCode = 0xAF,
@@ -249,6 +263,7 @@ where
             panel_id,
             release_code,
         });
+        self.set_control_mode(0)?;
         Ok(())
     }
 
@@ -436,5 +451,34 @@ where
     /// - [`Some(Ft6x36Info)`](Ft6x36Info) otherwise
     pub fn get_info(&self) -> Option<Ft6x36Info> {
         self.info
+    }
+
+    /// Get device Diagnostics
+    ///
+    /// # Returns
+    ///
+    /// - 
+    pub fn get_diagnostics(&mut self) -> Result<Diagnostics, E> {
+        let mut buf: [u8; 1] = [0];
+        self.i2c.write_read(self.address, &[Reg::PowerMode.into()], &mut buf)?;
+        let power_mode = buf[0];
+        self.i2c.write_read(self.address, &[Reg::GMode.into()], &mut buf)?;
+        let g_mode = buf[0];
+        self.i2c.write_read(self.address, &[Reg::OperatingMode.into()], &mut buf)?;
+        let state = buf[0];
+        self.i2c.write_read(self.address, &[Reg::LibVersionH.into()], &mut buf)?;
+        let lib_version_h = buf[0];
+        self.i2c.write_read(self.address, &[Reg::LibVersionL.into()], &mut buf)?;
+        let lib_version_l = buf[0];
+        let lib_version: u16 = (lib_version_h as u16) << 8 | lib_version_l as u16;
+        self.i2c.write_read(self.address, &[Reg::ControlMode.into()], &mut buf)?;
+        let control_mode = buf[0];
+        Ok(Diagnostics {
+            power_mode,
+            g_mode,
+            state,
+            lib_version,
+            control_mode,
+        })
     }
 }
