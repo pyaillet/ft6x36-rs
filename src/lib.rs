@@ -28,7 +28,7 @@ pub struct Diagnostics {
     g_mode: u8,
     lib_version: u16,
     state: u8,
-    control_mode: u8
+    control_mode: u8,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -297,6 +297,35 @@ where
         })
     }
 
+    pub fn get_touch_event_iter(&mut self) -> Result<RawTouchEvent, E> {
+        let mut buf: [u8; 1] = [0];
+        let mut report: [u8; REPORT_SIZE] = [0; REPORT_SIZE];
+        for i in 0..REPORT_SIZE {
+            self.i2c
+                .write_read(self.address, &[Reg::DeviceMode as u8 + i as u8], &mut buf)?;
+            report[i] = buf[0];
+        }
+
+        let touch_type: TouchType = report[3].into();
+
+        let (p1, p2) = match report[2] {
+            1 => (Some(Point::from(&report[3..7])), None),
+            2 => (
+                Some(Point::from(&report[3..7])),
+                Some(Point::from(&report[9..13])),
+            ),
+            _ => (None, None),
+        };
+
+        Ok(RawTouchEvent {
+            device_mode: report[0].into(),
+            gesture_id: report[1].into(),
+            touch_type,
+            p1,
+            p2,
+        })
+    }
+
     /// Get the current gesture detection parameters
     /// (Currently not working)
     pub fn get_gesture_params(&mut self) -> Result<GestureParams, E> {
@@ -457,21 +486,27 @@ where
     ///
     /// # Returns
     ///
-    /// - 
+    /// -
     pub fn get_diagnostics(&mut self) -> Result<Diagnostics, E> {
         let mut buf: [u8; 1] = [0];
-        self.i2c.write_read(self.address, &[Reg::PowerMode.into()], &mut buf)?;
+        self.i2c
+            .write_read(self.address, &[Reg::PowerMode.into()], &mut buf)?;
         let power_mode = buf[0];
-        self.i2c.write_read(self.address, &[Reg::GMode.into()], &mut buf)?;
+        self.i2c
+            .write_read(self.address, &[Reg::GMode.into()], &mut buf)?;
         let g_mode = buf[0];
-        self.i2c.write_read(self.address, &[Reg::OperatingMode.into()], &mut buf)?;
+        self.i2c
+            .write_read(self.address, &[Reg::OperatingMode.into()], &mut buf)?;
         let state = buf[0];
-        self.i2c.write_read(self.address, &[Reg::LibVersionH.into()], &mut buf)?;
+        self.i2c
+            .write_read(self.address, &[Reg::LibVersionH.into()], &mut buf)?;
         let lib_version_h = buf[0];
-        self.i2c.write_read(self.address, &[Reg::LibVersionL.into()], &mut buf)?;
+        self.i2c
+            .write_read(self.address, &[Reg::LibVersionL.into()], &mut buf)?;
         let lib_version_l = buf[0];
         let lib_version: u16 = (lib_version_h as u16) << 8 | lib_version_l as u16;
-        self.i2c.write_read(self.address, &[Reg::ControlMode.into()], &mut buf)?;
+        self.i2c
+            .write_read(self.address, &[Reg::ControlMode.into()], &mut buf)?;
         let control_mode = buf[0];
         Ok(Diagnostics {
             power_mode,
