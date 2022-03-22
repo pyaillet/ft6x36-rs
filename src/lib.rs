@@ -22,6 +22,7 @@ pub struct Ft6x36<I2C> {
     info: Option<Ft6x36Info>,
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 pub struct Diagnostics {
     power_mode: u8,
@@ -39,8 +40,8 @@ pub struct Point {
 
 impl From<&[u8]> for Point {
     fn from(data: &[u8]) -> Self {
-        let x: u16 = (data[0] as u16 & 0x0f << 8) | (data[1] as u16);
-        let y: u16 = (data[2] as u16 & 0x0f << 8) | (data[3] as u16);
+        let x: u16 = ((data[0] as u16 & 0x0f) << 8) | (data[1] as u16);
+        let y: u16 = ((data[2] as u16 & 0x0f) << 8) | (data[3] as u16);
         Self { x, y }
     }
 }
@@ -276,35 +277,6 @@ where
         let mut report: [u8; REPORT_SIZE] = [0; REPORT_SIZE];
         self.i2c
             .write_read(self.address, &[Reg::DeviceMode.into()], &mut report)?;
-
-        let touch_type: TouchType = report[3].into();
-
-        let (p1, p2) = match report[2] {
-            1 => (Some(Point::from(&report[3..7])), None),
-            2 => (
-                Some(Point::from(&report[3..7])),
-                Some(Point::from(&report[9..13])),
-            ),
-            _ => (None, None),
-        };
-
-        Ok(RawTouchEvent {
-            device_mode: report[0].into(),
-            gesture_id: report[1].into(),
-            touch_type,
-            p1,
-            p2,
-        })
-    }
-
-    pub fn get_touch_event_iter(&mut self) -> Result<RawTouchEvent, E> {
-        let mut buf: [u8; 1] = [0];
-        let mut report: [u8; REPORT_SIZE] = [0; REPORT_SIZE];
-        for i in 0..REPORT_SIZE {
-            self.i2c
-                .write_read(self.address, &[Reg::DeviceMode as u8 + i as u8], &mut buf)?;
-            report[i] = buf[0];
-        }
 
         let touch_type: TouchType = report[3].into();
 
