@@ -32,7 +32,7 @@ pub struct Diagnostics {
     control_mode: u8,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct TouchPoint {
     pub touch_type: TouchType,
     pub x: u16,
@@ -76,7 +76,7 @@ pub enum TouchEvent {
 
 /// Device mode
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, FromPrimitive, IntoPrimitive)]
+#[derive(Clone, Copy, Debug, FromPrimitive, IntoPrimitive, PartialEq, Eq)]
 pub enum DeviceMode {
     /// Working mode
     #[default]
@@ -86,7 +86,7 @@ pub enum DeviceMode {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, IntoPrimitive)]
+#[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, Eq)]
 pub enum TouchType {
     Press = 0b00,
     Release = 0b01,
@@ -107,7 +107,7 @@ impl From<u8> for TouchType {
 
 /// Touch event full raw report
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RawTouchEvent {
     /// Device mode
     pub device_mode: DeviceMode,
@@ -208,7 +208,7 @@ enum Reg {
 
 /// Known and detected gestures (currently not working though)
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive)]
+#[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive, PartialEq, Eq)]
 pub enum GestureId {
     #[default]
     NoGesture = 0x00,
@@ -495,3 +495,85 @@ where
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_raw_event_from_report_ok() {
+        let report: [u8; REPORT_SIZE] = [
+            0x00,           // Device Mode
+            0x00,           // Gesture id
+            0x02,           // Touch status
+            0b10_00_0000,   // Touch type _ Reserved _ XH
+            0x13,           // XL
+            0b0000_0000,    // Touch id _ YH
+            0x14,           // YL
+            0x00,           // Weight
+            0x00,           // Misc
+            0b10_00_0000,   // Touch type _ Reserved _ XH
+            0x25,           // XL
+            0b0000_0000,    // Touch id _ YH
+            0x26,           // YL
+            0x00,           // Weight
+            0x00,           // Misc
+        ];
+        let actual: RawTouchEvent = report.into();
+
+        let expected = RawTouchEvent {
+            device_mode: DeviceMode::Working,
+            gesture_id: GestureId::NoGesture,
+            p1: Some(TouchPoint {
+                touch_type: TouchType::Contact,
+                x: 0x13,
+                y: 0x14,
+            }),
+            p2: Some(TouchPoint {
+                touch_type: TouchType::Contact,
+                x: 0x25,
+                y: 0x26,
+            }),
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_raw_event_from_report_ok_high_value() {
+        let report: [u8; REPORT_SIZE] = [
+            0x00,           // Device Mode
+            0x00,           // Gesture id
+            0x02,           // Touch status
+            0b10_00_0001,   // Touch type _ Reserved _ XH
+            0x13,           // XL
+            0b0000_0010,    // Touch id _ YH
+            0x14,           // YL
+            0x00,           // Weight
+            0x00,           // Misc
+            0b10_00_0100,   // Touch type _ Reserved _ XH
+            0x25,           // XL
+            0b0000_1000,    // Touch id _ YH
+            0x26,           // YL
+            0x00,           // Weight
+            0x00,           // Misc
+        ];
+        let actual: RawTouchEvent = report.into();
+
+        let expected = RawTouchEvent {
+            device_mode: DeviceMode::Working,
+            gesture_id: GestureId::NoGesture,
+            p1: Some(TouchPoint {
+                touch_type: TouchType::Contact,
+                x: 0x0113,
+                y: 0x0214,
+            }),
+            p2: Some(TouchPoint {
+                touch_type: TouchType::Contact,
+                x: 0x0425,
+                y: 0x0826,
+            }),
+        };
+
+        assert_eq!(actual, expected);
+    }
+}
