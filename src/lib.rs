@@ -1,9 +1,13 @@
 #![no_std]
+#![feature(int_abs_diff)]
 #![doc = include_str!("../README.md")]
 
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 
 use num_enum::{FromPrimitive, IntoPrimitive};
+
+#[cfg(feature = "event_process")]
+use core::time::Duration;
 
 const DEFAULT_FT6X36_ADDRESS: u8 = 0x38;
 const REPORT_SIZE: usize = 0x0f;
@@ -20,6 +24,37 @@ pub struct Ft6x36<I2C> {
     i2c: I2C,
     /// Information of the device when it's initialized
     info: Option<Ft6x36Info>,
+    #[cfg(feature = "event_process")]
+    /// Raw events
+    events: (Option<TimedRawTouchEvent>, Option<TimedRawTouchEvent>),
+    #[cfg(feature = "event_process")]
+    /// Event process config
+    config: ProcessEventConfig,
+}
+
+#[cfg(feature = "event_process")]
+pub struct ProcessEventConfig {
+    gesture_timing: Duration,
+    max_swipe_delta: u16,
+    min_swipe_delta: u16,
+}
+
+#[cfg(feature = "event_process")]
+impl Default for ProcessEventConfig {
+    fn default() -> Self {
+        ProcessEventConfig {
+            gesture_timing: Duration::from_millis(800),
+            max_swipe_delta: 20,
+            min_swipe_delta: 20,
+        }
+    }
+}
+
+#[cfg(feature = "event_process")]
+#[derive(Debug, PartialEq, Eq)]
+pub struct TimedRawTouchEvent {
+    time: Duration,
+    event: RawTouchEvent,
 }
 
 #[allow(dead_code)]
@@ -49,6 +84,7 @@ impl From<&[u8]> for TouchPoint {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Direction {
     Up,
     Down,
@@ -56,18 +92,20 @@ pub enum Direction {
     Right,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Zoom {
     ZoomIn(TouchPoint),
     ZoomOut(TouchPoint),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct SwipeInfo {
-    pub velocity: u8,
+    pub velocity: u16,
     pub point: TouchPoint,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum TouchEvent {
-    NoEvent,
     TouchOnePoint(TouchPoint),
     TouchTwoPoint(TouchPoint, TouchPoint),
     Swipe(Direction, SwipeInfo),
@@ -264,9 +302,34 @@ where
             address: DEFAULT_FT6X36_ADDRESS,
             i2c,
             info: None,
+            #[cfg(feature = "event_process")]
+            events: (None, None),
+            #[cfg(feature = "event_process")]
+            config: ProcessEventConfig::default(),
         }
     }
 
+    /// Create a new Ft6x36 device with the default slave address
+    ///
+    /// # Arguments
+    ///
+    /// - `i2c` I2C bus used to communicate with the device
+    /// - `config`- [ProcessEventConfig](ProcessEventConfig) for the event processor
+    ///
+    /// # Returns
+    ///
+    /// - [Ft6x36 driver](Ft6x36) created
+    ///
+    #[cfg(feature = "event_process")]
+    pub fn new_with_config(i2c: I2C, config: ProcessEventConfig) -> Self {
+        Self {
+            address: DEFAULT_FT6X36_ADDRESS,
+            i2c,
+            info: None,
+            events: (None, None),
+            config,
+        }
+    }
     /// Initialize the device
     ///
     /// Currently it only gather informations on the device and initialize the
@@ -493,6 +556,106 @@ where
             control_mode,
         })
     }
+
+    #[cfg(feature = "event_process")]
+    pub fn process_event(
+        &mut self,
+        time: core::time::Duration,
+        event: RawTouchEvent,
+    ) -> Option<TouchEvent> {
+        // If there are no touch points, it means the end of gesture
+        // We need to analyze it
+        if event.p1.is_none() {
+            match (self.events.0.take(), self.events.1.take()) {
+                (Some(e1), Some(mut e2)) => {
+                    if (e2.time - e1.time).le(&self.config.gesture_timing) {
+                        (match (e1.event.p1, e2.event.p1) {
+                            (Some(e1p1), Some(e2p1)) => {
+                                process_swipe(e1p1, e2p1, &self.config)
+                            }
+                            _ => None,
+                        })
+                        .or_else(|| process_touch_points(e2.event.p1.take(), e2.event.p2.take()))
+                    } else {
+                        process_touch_points(e2.event.p1.take(), e2.event.p2.take())
+                    }
+                }
+                (Some(mut e1), None) => {
+                    process_touch_points(e1.event.p1.take(), e1.event.p2.take())
+                }
+                (_, _) => None,
+            }
+        } else {
+            // The gesture is not terminated, we should keep track of the last event
+            if self.events.0.is_some() {
+                self.events.1 = Some(TimedRawTouchEvent { time, event });
+            } else {
+                self.events.0 = Some(TimedRawTouchEvent { time, event });
+            }
+            None
+        }
+    }
+}
+
+#[cfg(feature = "event_process")]
+fn process_touch_points(
+    mut p1: Option<TouchPoint>,
+    mut p2: Option<TouchPoint>,
+) -> Option<TouchEvent> {
+    match (p1.take(), p2.take()) {
+        (Some(p1), Some(p2)) => Some(TouchEvent::TouchTwoPoint(p1, p2)),
+        (Some(p1), None) => Some(TouchEvent::TouchOnePoint(p1)),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "event_process")]
+fn process_swipe(
+    e1p1: TouchPoint,
+    e2p1: TouchPoint,
+    config: &ProcessEventConfig,
+) -> Option<TouchEvent> {
+    let delta_x = e1p1.x.abs_diff(e2p1.x);
+    let delta_y = e1p1.y.abs_diff(e2p1.y);
+    if delta_x < config.max_swipe_delta && delta_y > config.min_swipe_delta {
+        if e1p1.y > e2p1.y {
+            Some(TouchEvent::Swipe(
+                Direction::Down,
+                SwipeInfo {
+                    velocity: e1p1.y - e2p1.y,
+                    point: e1p1,
+                },
+            ))
+        } else {
+            Some(TouchEvent::Swipe(
+                Direction::Up,
+                SwipeInfo {
+                    velocity: e2p1.y - e1p1.y,
+                    point: e1p1,
+                },
+            ))
+        }
+    } else if delta_x > config.max_swipe_delta && delta_y < config.min_swipe_delta {
+        if e1p1.x > e2p1.x {
+            Some(TouchEvent::Swipe(
+                Direction::Right,
+                SwipeInfo {
+                    velocity: e1p1.x - e2p1.x,
+                    point: e1p1,
+                },
+            ))
+        } else {
+            Some(TouchEvent::Swipe(
+                Direction::Left,
+                SwipeInfo {
+                    velocity: e2p1.x - e1p1.x,
+                    point: e1p1,
+                },
+            ))
+        }
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -502,21 +665,21 @@ mod test {
     #[test]
     fn test_raw_event_from_report_ok() {
         let report: [u8; REPORT_SIZE] = [
-            0x00,           // Device Mode
-            0x00,           // Gesture id
-            0x02,           // Touch status
-            0b10_00_0000,   // Touch type _ Reserved _ XH
-            0x13,           // XL
-            0b0000_0000,    // Touch id _ YH
-            0x14,           // YL
-            0x00,           // Weight
-            0x00,           // Misc
-            0b10_00_0000,   // Touch type _ Reserved _ XH
-            0x25,           // XL
-            0b0000_0000,    // Touch id _ YH
-            0x26,           // YL
-            0x00,           // Weight
-            0x00,           // Misc
+            0x00,         // Device Mode
+            0x00,         // Gesture id
+            0x02,         // Touch status
+            0b10_00_0000, // Touch type _ Reserved _ XH
+            0x13,         // XL
+            0b0000_0000,  // Touch id _ YH
+            0x14,         // YL
+            0x00,         // Weight
+            0x00,         // Misc
+            0b10_00_0000, // Touch type _ Reserved _ XH
+            0x25,         // XL
+            0b0000_0000,  // Touch id _ YH
+            0x26,         // YL
+            0x00,         // Weight
+            0x00,         // Misc
         ];
         let actual: RawTouchEvent = report.into();
 
@@ -541,21 +704,21 @@ mod test {
     #[test]
     fn test_raw_event_from_report_ok_high_value() {
         let report: [u8; REPORT_SIZE] = [
-            0x00,           // Device Mode
-            0x00,           // Gesture id
-            0x02,           // Touch status
-            0b10_00_0001,   // Touch type _ Reserved _ XH
-            0x13,           // XL
-            0b0000_0010,    // Touch id _ YH
-            0x14,           // YL
-            0x00,           // Weight
-            0x00,           // Misc
-            0b10_00_0100,   // Touch type _ Reserved _ XH
-            0x25,           // XL
-            0b0000_1000,    // Touch id _ YH
-            0x26,           // YL
-            0x00,           // Weight
-            0x00,           // Misc
+            0x00,         // Device Mode
+            0x00,         // Gesture id
+            0x02,         // Touch status
+            0b10_00_0001, // Touch type _ Reserved _ XH
+            0x13,         // XL
+            0b0000_0010,  // Touch id _ YH
+            0x14,         // YL
+            0x00,         // Weight
+            0x00,         // Misc
+            0b10_00_0100, // Touch type _ Reserved _ XH
+            0x25,         // XL
+            0b0000_1000,  // Touch id _ YH
+            0x26,         // YL
+            0x00,         // Weight
+            0x00,         // Misc
         ];
         let actual: RawTouchEvent = report.into();
 
@@ -573,6 +736,130 @@ mod test {
                 y: 0x0826,
             }),
         };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_process_swipe_right_ok() {
+        let p1 = TouchPoint {
+            x: 340,
+            y: 200,
+            touch_type: TouchType::Contact,
+        };
+        let p2 = TouchPoint {
+            x: 25,
+            y: 203,
+            touch_type: TouchType::Contact,
+        };
+        let actual = process_swipe(p1, p2, &ProcessEventConfig::default());
+        assert!(actual.is_some());
+        let actual = actual.unwrap();
+
+        let expected = TouchEvent::Swipe(
+            Direction::Right,
+            SwipeInfo {
+                velocity: 315,
+                point: TouchPoint {
+                    x: 340,
+                    y: 200,
+                    touch_type: TouchType::Contact,
+                },
+            },
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_process_swipe_left_ok() {
+        let p1 = TouchPoint {
+            x: 231,
+            y: 200,
+            touch_type: TouchType::Contact,
+        };
+        let p2 = TouchPoint {
+            x: 334,
+            y: 197,
+            touch_type: TouchType::Contact,
+        };
+        let actual = process_swipe(p1, p2, &ProcessEventConfig::default());
+        assert!(actual.is_some());
+        let actual = actual.unwrap();
+
+        let expected = TouchEvent::Swipe(
+            Direction::Left,
+            SwipeInfo {
+                velocity: 103,
+                point: TouchPoint {
+                    x: 231,
+                    y: 200,
+                    touch_type: TouchType::Contact,
+                },
+            },
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_process_swipe_up_ok() {
+        let p1 = TouchPoint {
+            x: 231,
+            y: 200,
+            touch_type: TouchType::Contact,
+        };
+        let p2 = TouchPoint {
+            x: 234,
+            y: 302,
+            touch_type: TouchType::Contact,
+        };
+        let actual = process_swipe(p1, p2, &ProcessEventConfig::default());
+        assert!(actual.is_some());
+        let actual = actual.unwrap();
+
+        let expected = TouchEvent::Swipe(
+            Direction::Up,
+            SwipeInfo {
+                velocity: 102,
+                point: TouchPoint {
+                    x: 231,
+                    y: 200,
+                    touch_type: TouchType::Contact,
+                },
+            },
+        );
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_process_swipe_down_ok() {
+        let p1 = TouchPoint {
+            x: 231,
+            y: 200,
+            touch_type: TouchType::Contact,
+        };
+        let p2 = TouchPoint {
+            x: 225,
+            y: 25,
+            touch_type: TouchType::Contact,
+        };
+        let actual = process_swipe(p1, p2, &ProcessEventConfig::default());
+        assert!(actual.is_some());
+        let actual = actual.unwrap();
+
+        let expected = TouchEvent::Swipe(
+            Direction::Down,
+            SwipeInfo {
+                velocity: 175,
+                point: TouchPoint {
+                    x: 231,
+                    y: 200,
+                    touch_type: TouchType::Contact,
+                },
+            },
+        );
 
         assert_eq!(actual, expected);
     }
