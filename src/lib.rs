@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(int_abs_diff)]
 #![doc = include_str!("../README.md")]
 
 use embedded_hal::blocking::i2c::{Write, WriteRead};
@@ -570,9 +569,7 @@ where
                 (Some(e1), Some(mut e2)) => {
                     if (e2.time - e1.time).le(&self.config.gesture_timing) {
                         (match (e1.event.p1, e2.event.p1) {
-                            (Some(e1p1), Some(e2p1)) => {
-                                process_swipe(e1p1, e2p1, &self.config)
-                            }
+                            (Some(e1p1), Some(e2p1)) => process_swipe(e1p1, e2p1, &self.config),
                             _ => None,
                         })
                         .or_else(|| process_touch_points(e2.event.p1.take(), e2.event.p2.take()))
@@ -615,8 +612,8 @@ fn process_swipe(
     e2p1: TouchPoint,
     config: &ProcessEventConfig,
 ) -> Option<TouchEvent> {
-    let delta_x = e1p1.x.abs_diff(e2p1.x);
-    let delta_y = e1p1.y.abs_diff(e2p1.y);
+    let delta_x = (e1p1.x as i16 - e2p1.x as i16).abs() as u16;
+    let delta_y = (e1p1.y as i16 - e2p1.y as i16).abs() as u16;
     if delta_x < config.max_swipe_delta && delta_y > config.min_swipe_delta {
         if e1p1.y > e2p1.y {
             Some(TouchEvent::Swipe(
