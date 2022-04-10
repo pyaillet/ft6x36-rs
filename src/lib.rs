@@ -43,8 +43,8 @@ impl Default for ProcessEventConfig {
     fn default() -> Self {
         ProcessEventConfig {
             gesture_timing: Duration::from_millis(800),
-            max_swipe_delta: 20,
-            min_swipe_delta: 20,
+            max_swipe_delta: 30,
+            min_swipe_delta: 30,
         }
     }
 }
@@ -83,7 +83,7 @@ impl From<&[u8]> for TouchPoint {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
     Up,
     Down,
@@ -91,19 +91,19 @@ pub enum Direction {
     Right,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Zoom {
     ZoomIn(TouchPoint),
     ZoomOut(TouchPoint),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SwipeInfo {
     pub velocity: u16,
     pub point: TouchPoint,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TouchEvent {
     TouchOnePoint(TouchPoint),
     TouchTwoPoint(TouchPoint, TouchPoint),
