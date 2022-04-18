@@ -14,6 +14,10 @@ const REPORT_SIZE: usize = 0x0f;
 #[cfg(feature = "event_process")]
 const MAX_DELTA_TOUCH_EVENT: Duration = Duration::from_millis(200);
 
+/// Represents the dimensions of the device
+#[derive(Copy, Clone, Debug)]
+pub struct Dimension(pub u16, pub u16);
+
 /// Driver representation holding:
 ///
 /// - The I2C Slave address of the device
@@ -32,6 +36,19 @@ pub struct Ft6x36<I2C> {
     #[cfg(feature = "event_process")]
     /// Event process config
     config: ProcessEventConfig,
+    /// Orientation of the screen
+    orientation: Orientation,
+    /// Dimensions of the device
+    size: Dimension,
+}
+
+/// Represents the orientation of the device
+#[derive(Copy, Clone, Debug)]
+pub enum Orientation {
+    Portrait,
+    Landscape,
+    InvertedPortrait,
+    InvertedLandscape,
 }
 
 #[cfg(feature = "event_process")]
@@ -74,6 +91,28 @@ pub struct TouchPoint {
     pub touch_type: TouchType,
     pub x: u16,
     pub y: u16,
+}
+
+impl TouchPoint {
+    fn translate_coordinates(self, size: Dimension, orientation: Orientation) -> Self {
+        fn difference_or_zero(o1: u16, o2: u16) -> u16 {
+            if o2 > o1 {
+                0
+            } else {
+                o1 - o2
+            }
+        }
+        let TouchPoint { touch_type, x, y } = self;
+        let (x, y) = match orientation {
+            Orientation::Portrait => (x, y),
+            Orientation::InvertedPortrait => {
+                (difference_or_zero(size.0, x), difference_or_zero(size.1, y))
+            }
+            Orientation::Landscape => (y, difference_or_zero(size.0, x)),
+            Orientation::InvertedLandscape => (difference_or_zero(size.1, y), x),
+        };
+        TouchPoint { x, y, touch_type }
+    }
 }
 
 impl From<&[u8]> for TouchPoint {
@@ -170,6 +209,25 @@ impl From<[u8; REPORT_SIZE]> for RawTouchEvent {
         RawTouchEvent {
             device_mode: report[0].into(),
             gesture_id: report[1].into(),
+            p1,
+            p2,
+        }
+    }
+}
+
+impl RawTouchEvent {
+    fn translate_orientation(self, size: Dimension, orientation: Orientation) -> Self {
+        let RawTouchEvent {
+            device_mode,
+            gesture_id,
+            p1,
+            p2,
+        } = self;
+        let p1 = p1.map(|p| p.translate_coordinates(size, orientation));
+        let p2 = p2.map(|p| p.translate_coordinates(size, orientation));
+        RawTouchEvent {
+            device_mode,
+            gesture_id,
             p1,
             p2,
         }
@@ -294,12 +352,13 @@ where
     /// # Arguments
     ///
     /// - `i2c` I2C bus used to communicate with the device
+    /// - `size` [Dimension](Dimension) of the device
     ///
     /// # Returns
     ///
     /// - [Ft6x36 driver](Ft6x36) created
     ///
-    pub fn new(i2c: I2C) -> Self {
+    pub fn new(i2c: I2C, size: Dimension) -> Self {
         Self {
             address: DEFAULT_FT6X36_ADDRESS,
             i2c,
@@ -308,6 +367,8 @@ where
             events: (None, None),
             #[cfg(feature = "event_process")]
             config: ProcessEventConfig::default(),
+            orientation: Orientation::Portrait,
+            size,
         }
     }
 
@@ -316,6 +377,7 @@ where
     /// # Arguments
     ///
     /// - `i2c` I2C bus used to communicate with the device
+    /// - `size` [Dimension](Dimension) of the device
     /// - `config`- [ProcessEventConfig](ProcessEventConfig) for the event processor
     ///
     /// # Returns
@@ -323,15 +385,18 @@ where
     /// - [Ft6x36 driver](Ft6x36) created
     ///
     #[cfg(feature = "event_process")]
-    pub fn new_with_config(i2c: I2C, config: ProcessEventConfig) -> Self {
+    pub fn new_with_config(i2c: I2C, size: Dimension, config: ProcessEventConfig) -> Self {
         Self {
             address: DEFAULT_FT6X36_ADDRESS,
             i2c,
             info: None,
             events: (None, None),
             config,
+            size,
+            orientation: Orientation::Portrait,
         }
     }
+
     /// Initialize the device
     ///
     /// Currently it only gather informations on the device and initialize the
@@ -355,6 +420,15 @@ where
         Ok(())
     }
 
+    /// Change orientation for the device
+    ///
+    /// # Arguments
+    ///
+    /// - `orientation` - set the new [Orientation](Orientation)
+    pub fn set_orientation(&mut self, orientation: Orientation) {
+        self.orientation = orientation;
+    }
+
     /// Get the full raw report of touch events
     ///
     /// # Returns
@@ -365,7 +439,8 @@ where
         self.i2c
             .write_read(self.address, &[Reg::DeviceMode.into()], &mut report)?;
 
-        Ok(report.into())
+        let event: RawTouchEvent = report.into();
+        Ok(event.translate_orientation(self.size, self.orientation))
     }
 
     /// Get the current gesture detection parameters
@@ -592,14 +667,17 @@ where
                 // ditch it in favor of a TouchOnePoint if there are happening
                 // close to each other
                 match &self.events.1 {
-                    Some(old_evt1) =>  {
+                    Some(old_evt1) => {
                         let time_evt1 = old_evt1.time;
                         let old_evt1 = old_evt1.event;
-                        if old_evt1.p2.is_none() || event.p2.is_some() || (time - time_evt1) > MAX_DELTA_TOUCH_EVENT {
+                        if old_evt1.p2.is_none()
+                            || event.p2.is_some()
+                            || (time - time_evt1) > MAX_DELTA_TOUCH_EVENT
+                        {
                             self.events.1 = Some(TimedRawTouchEvent { time, event })
                         }
-                    },
-                    None =>  self.events.1 = Some(TimedRawTouchEvent { time, event })
+                    }
+                    None => self.events.1 = Some(TimedRawTouchEvent { time, event }),
                 }
             } else {
                 self.events.0 = Some(TimedRawTouchEvent { time, event });
