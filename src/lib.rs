@@ -11,6 +11,9 @@ use core::time::Duration;
 const DEFAULT_FT6X36_ADDRESS: u8 = 0x38;
 const REPORT_SIZE: usize = 0x0f;
 
+#[cfg(feature = "event_process")]
+const MAX_DELTA_TOUCH_EVENT: Duration = Duration::from_millis(200);
+
 /// Driver representation holding:
 ///
 /// - The I2C Slave address of the device
@@ -585,7 +588,19 @@ where
         } else {
             // The gesture is not terminated, we should keep track of the last event
             if self.events.0.is_some() {
-                self.events.1 = Some(TimedRawTouchEvent { time, event });
+                // Though if a previous event was TouchTwoPoint we should not
+                // ditch it in favor of a TouchOnePoint if there are happening
+                // close to each other
+                match &self.events.1 {
+                    Some(old_evt1) =>  {
+                        let time_evt1 = old_evt1.time;
+                        let old_evt1 = old_evt1.event;
+                        if old_evt1.p2.is_none() || event.p2.is_some() || (time - time_evt1) > MAX_DELTA_TOUCH_EVENT {
+                            self.events.1 = Some(TimedRawTouchEvent { time, event })
+                        }
+                    },
+                    None =>  self.events.1 = Some(TimedRawTouchEvent { time, event })
+                }
             } else {
                 self.events.0 = Some(TimedRawTouchEvent { time, event });
             }
@@ -612,8 +627,8 @@ fn process_swipe(
     e2p1: TouchPoint,
     config: &ProcessEventConfig,
 ) -> Option<TouchEvent> {
-    let delta_x = (e1p1.x as i16 - e2p1.x as i16).abs() as u16;
-    let delta_y = (e1p1.y as i16 - e2p1.y as i16).abs() as u16;
+    let delta_x = (e1p1.x as i16 - e2p1.x as i16).unsigned_abs();
+    let delta_y = (e1p1.y as i16 - e2p1.y as i16).unsigned_abs();
     if delta_x < config.max_swipe_delta && delta_y > config.min_swipe_delta {
         if e1p1.y > e2p1.y {
             Some(TouchEvent::Swipe(
