@@ -1,6 +1,6 @@
 [package]
 name = "ft6x36"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 categories = ["embedded", "hardware-support"]
 description = "Rust driver for Ft6x36 touch screen"
