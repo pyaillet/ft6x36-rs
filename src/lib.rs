@@ -1,8 +1,7 @@
 #![no_std]
 #![doc = include_str!("../README.md")]
 
-use embedded_hal::blocking::i2c::{Write, WriteRead};
-
+use embedded_hal::i2c::{ErrorType, I2c, SevenBitAddress};
 use num_enum::{FromPrimitive, IntoPrimitive};
 
 #[cfg(feature = "event_process")]
@@ -343,9 +342,9 @@ pub struct Ft6x36Info {
     release_code: u8,
 }
 
-impl<I2C, E> Ft6x36<I2C>
+impl<I2C> Ft6x36<I2C>
 where
-    I2C: Write<Error = E> + WriteRead<Error = E>,
+    I2C: I2c<SevenBitAddress>,
 {
     /// Create a new Ft6x36 device with the default slave address
     ///
@@ -402,7 +401,7 @@ where
     /// Currently it only gather informations on the device and initialize the
     /// [info structure of the driver](Ft6x36Info)
     ///
-    pub fn init(&mut self) -> Result<(), E> {
+    pub fn init(&mut self) -> Result<(), <I2C as ErrorType>::Error> {
         let mut buf: [u8; 13] = [0; 13];
         self.i2c
             .write_read(self.address, &[Reg::ChipId.into()], &mut buf)?;
@@ -434,7 +433,7 @@ where
     /// # Returns
     ///
     /// - [TouchEvent](TouchEvent) the full TouchEvent report
-    pub fn get_touch_event(&mut self) -> Result<RawTouchEvent, E> {
+    pub fn get_touch_event(&mut self) -> Result<RawTouchEvent, <I2C as ErrorType>::Error> {
         let mut report: [u8; REPORT_SIZE] = [0; REPORT_SIZE];
         self.i2c
             .write_read(self.address, &[Reg::DeviceMode.into()], &mut report)?;
@@ -445,7 +444,7 @@ where
 
     /// Get the current gesture detection parameters
     /// (Currently not working)
-    pub fn get_gesture_params(&mut self) -> Result<GestureParams, E> {
+    pub fn get_gesture_params(&mut self) -> Result<GestureParams, <I2C as ErrorType>::Error> {
         let mut buf: [u8; 6] = [0; 6];
 
         self.i2c
@@ -465,7 +464,7 @@ where
     /// # Arguments
     ///
     /// - `value` the threshold value
-    pub fn set_touch_threshold(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_touch_threshold(&mut self, value: u8) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::TouchDetectionThreshold.into(), value])
     }
@@ -475,7 +474,10 @@ where
     /// # Arguments
     ///
     /// - `value` the touch filter coefficient
-    pub fn set_touch_filter_coefficient(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_touch_filter_coefficient(
+        &mut self,
+        value: u8,
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::TouchFilterCoeff.into(), value])
     }
@@ -489,7 +491,7 @@ where
     /// # Arguments
     ///
     /// - `value` the control mode
-    pub fn set_control_mode(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_control_mode(&mut self, value: u8) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::ControlMode.into(), value])
     }
@@ -499,7 +501,7 @@ where
     /// # Arguments
     ///
     /// - `value` the switching period
-    pub fn set_time_active_monitor(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_time_active_monitor(&mut self, value: u8) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::TimeActiveMonitor.into(), value])
     }
@@ -509,7 +511,7 @@ where
     /// # Arguments
     ///
     /// - `value` the report rate in Active mode
-    pub fn set_period_active(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_period_active(&mut self, value: u8) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::PeriodActive.into(), value])
     }
@@ -519,7 +521,7 @@ where
     /// # Arguments
     ///
     /// - `value` the report rate in Monitor mode
-    pub fn set_period_monitor(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_period_monitor(&mut self, value: u8) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::PeriodMonitor.into(), value])
     }
@@ -530,7 +532,10 @@ where
     ///
     /// - `value` The value of the minimum allowed angle while rotating gesture
     ///   mode
-    pub fn set_gesture_minimum_angle(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_gesture_minimum_angle(
+        &mut self,
+        value: u8,
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::GestRadianValue.into(), value])
     }
@@ -541,7 +546,10 @@ where
     ///
     /// - `value` The value of the maximum offset for detecting Moving left and Moving right gestures
     ///   mode
-    pub fn set_gesture_offset_left_right(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_gesture_offset_left_right(
+        &mut self,
+        value: u8,
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::GestOffsetLeftRight.into(), value])
     }
@@ -552,7 +560,10 @@ where
     ///
     /// - `value` The value of the maximum offset for detecting Moving up and Moving down gestures
     ///   mode
-    pub fn set_gesture_offset_up_down(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_gesture_offset_up_down(
+        &mut self,
+        value: u8,
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::GestOffsetUpDown.into(), value])
     }
@@ -563,7 +574,10 @@ where
     ///
     /// - `value` The value of the minimum distance for detecting Moving up and Moving down gestures
     ///   mode
-    pub fn set_gesture_distance_up_down(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_gesture_distance_up_down(
+        &mut self,
+        value: u8,
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::GestDistUpDown.into(), value])
     }
@@ -574,7 +588,10 @@ where
     ///
     /// - `value` The value of the minimum distance for detecting Moving left and Moving right
     ///   gestures mode
-    pub fn set_gesture_distance_left_right(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_gesture_distance_left_right(
+        &mut self,
+        value: u8,
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::GestDistLeftRight.into(), value])
     }
@@ -584,7 +601,10 @@ where
     /// # Arguments
     ///
     /// - `value` The value of the minimum distance for detecting zoom gestures mode
-    pub fn set_gesture_distance_zoom(&mut self, value: u8) -> Result<(), E> {
+    pub fn set_gesture_distance_zoom(
+        &mut self,
+        value: u8,
+    ) -> Result<(), <I2C as ErrorType>::Error> {
         self.i2c
             .write(self.address, &[Reg::GestDistZoom.into(), value])
     }
@@ -604,7 +624,7 @@ where
     /// # Returns
     ///
     /// -
-    pub fn get_diagnostics(&mut self) -> Result<Diagnostics, E> {
+    pub fn get_diagnostics(&mut self) -> Result<Diagnostics, <I2C as ErrorType>::Error> {
         let mut buf: [u8; 1] = [0];
         self.i2c
             .write_read(self.address, &[Reg::PowerMode.into()], &mut buf)?;
@@ -754,6 +774,7 @@ mod test {
 
     #[test]
     fn test_raw_event_from_report_ok() {
+        #[allow(clippy::unusual_byte_groupings)]
         let report: [u8; REPORT_SIZE] = [
             0x00,         // Device Mode
             0x00,         // Gesture id
@@ -793,6 +814,7 @@ mod test {
 
     #[test]
     fn test_raw_event_from_report_ok_high_value() {
+        #[allow(clippy::unusual_byte_groupings)]
         let report: [u8; REPORT_SIZE] = [
             0x00,         // Device Mode
             0x00,         // Gesture id
