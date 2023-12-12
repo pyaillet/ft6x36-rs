@@ -7,6 +7,9 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 #[cfg(feature = "event_process")]
 use core::time::Duration;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 const DEFAULT_FT6X36_ADDRESS: u8 = 0x38;
 const REPORT_SIZE: usize = 0x0f;
 
@@ -42,7 +45,8 @@ pub struct Ft6x36<I2C> {
 }
 
 /// Represents the orientation of the device
-#[derive(Copy, Clone, Debug)]
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum Orientation {
     Portrait,
     Landscape,
@@ -50,6 +54,8 @@ pub enum Orientation {
     InvertedLandscape,
 }
 
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[cfg(feature = "event_process")]
 pub struct ProcessEventConfig {
     gesture_timing: Duration,
@@ -68,6 +74,8 @@ impl Default for ProcessEventConfig {
     }
 }
 
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[cfg(feature = "event_process")]
 #[derive(Debug, PartialEq, Eq)]
 pub struct TimedRawTouchEvent {
@@ -85,7 +93,8 @@ pub struct Diagnostics {
     control_mode: u8,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
 pub struct TouchPoint {
     pub touch_type: TouchType,
     pub x: u16,
@@ -124,7 +133,8 @@ impl From<&[u8]> for TouchPoint {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
     Up,
     Down,
@@ -132,19 +142,22 @@ pub enum Direction {
     Right,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Zoom {
     ZoomIn(TouchPoint),
     ZoomOut(TouchPoint),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SwipeInfo {
     pub velocity: u16,
     pub point: TouchPoint,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TouchEvent {
     TouchOnePoint(TouchPoint),
     TouchTwoPoint(TouchPoint, TouchPoint),
@@ -153,6 +166,8 @@ pub enum TouchEvent {
 }
 
 /// Device mode
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, FromPrimitive, IntoPrimitive, PartialEq, Eq)]
 pub enum DeviceMode {
@@ -163,6 +178,8 @@ pub enum DeviceMode {
     Factory = 0b100,
 }
 
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, Eq)]
 pub enum TouchType {
@@ -184,6 +201,8 @@ impl From<u8> for TouchType {
 }
 
 /// Touch event full raw report
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RawTouchEvent {
@@ -235,6 +254,8 @@ impl RawTouchEvent {
 
 /// Settings for gesture detection
 /// (Currently not working)
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub struct GestureParams {
@@ -304,6 +325,8 @@ enum Reg {
 }
 
 /// Known and detected gestures (currently not working though)
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive, PartialEq, Eq)]
 pub enum GestureId {
@@ -318,6 +341,8 @@ pub enum GestureId {
 }
 
 /// Enum describing known chips
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive)]
 pub enum ChipId {
@@ -329,6 +354,8 @@ pub enum ChipId {
 }
 
 /// A structure giving information on the current device
+#[cfg(feature = "serde")]
+#[derive(Serialize, Deserialize)]
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct Ft6x36Info {
