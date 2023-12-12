@@ -425,7 +425,7 @@ where
 
     /// Initialize the device
     ///
-    /// Currently it only gather informations on the device and initialize the
+    /// Currently it only gathers information on the device and initializes the
     /// [info structure of the driver](Ft6x36Info)
     ///
     pub fn init(&mut self) -> Result<(), <I2C as ErrorType>::Error> {
@@ -636,7 +636,7 @@ where
             .write(self.address, &[Reg::GestDistZoom.into(), value])
     }
 
-    /// Get device informations
+    /// Get device information
     ///
     /// # Returns
     ///
