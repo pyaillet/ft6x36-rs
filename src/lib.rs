@@ -369,7 +369,7 @@ where
     /// # Arguments
     ///
     /// - `i2c` I2C bus used to communicate with the device
-    /// - `size` [Dimension](Dimension) of the device
+    /// - `size` [`Dimension`] of the device
     ///
     /// # Returns
     ///
@@ -394,8 +394,8 @@ where
     /// # Arguments
     ///
     /// - `i2c` I2C bus used to communicate with the device
-    /// - `size` [Dimension](Dimension) of the device
-    /// - `config`- [ProcessEventConfig](ProcessEventConfig) for the event processor
+    /// - `size` [`Dimension`] of the device
+    /// - `config`- [`ProcessEventConfig`] for the event processor
     ///
     /// # Returns
     ///
@@ -450,7 +450,7 @@ where
     ///
     /// # Returns
     ///
-    /// - [TouchEvent](TouchEvent) the full TouchEvent report
+    /// - [`TouchEvent`] the full TouchEvent report
     pub fn get_touch_event(&mut self) -> Result<RawTouchEvent, <I2C as ErrorType>::Error> {
         let mut report: [u8; REPORT_SIZE] = [0; REPORT_SIZE];
         self.i2c
