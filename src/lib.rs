@@ -441,7 +441,7 @@ where
     ///
     /// # Arguments
     ///
-    /// - `orientation` - set the new [Orientation](Orientation)
+    /// - `orientation` - set the new [`Orientation`]
     pub fn set_orientation(&mut self, orientation: Orientation) {
         self.orientation = orientation;
     }
