@@ -19,4 +19,4 @@ defmt = ["dep:defmt"]
 embedded-hal = { version = "1.0.0" }
 num_enum = { version = "0.7.0", default-features = false }
 serde = { version = "1.0.193", optional = true, default-features = false }
-defmt = { version = "0.3.0", optional = true }
+defmt = { version = "0.3.10", optional = true }
