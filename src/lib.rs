@@ -18,6 +18,7 @@ const MAX_DELTA_TOUCH_EVENT: Duration = Duration::from_millis(200);
 
 /// Represents the dimensions of the device
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Dimension(pub u16, pub u16);
 
 /// Driver representation holding:
@@ -47,6 +48,7 @@ pub struct Ft6x36<I2C> {
 /// Represents the orientation of the device
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Orientation {
     Portrait,
     Landscape,
@@ -56,6 +58,7 @@ pub enum Orientation {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg(feature = "event_process")]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ProcessEventConfig {
     gesture_timing: Duration,
     max_swipe_delta: u16,
@@ -75,6 +78,7 @@ impl Default for ProcessEventConfig {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg(feature = "event_process")]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Eq)]
 pub struct TimedRawTouchEvent {
     time: Duration,
@@ -83,6 +87,7 @@ pub struct TimedRawTouchEvent {
 
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Diagnostics {
     power_mode: u8,
     g_mode: u8,
@@ -93,6 +98,7 @@ pub struct Diagnostics {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TouchPoint {
     pub touch_type: TouchType,
     pub x: u16,
@@ -133,6 +139,7 @@ impl From<&[u8]> for TouchPoint {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Direction {
     Up,
     Down,
@@ -142,6 +149,7 @@ pub enum Direction {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Zoom {
     ZoomIn(TouchPoint),
     ZoomOut(TouchPoint),
@@ -149,6 +157,7 @@ pub enum Zoom {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SwipeInfo {
     pub velocity: u16,
     pub point: TouchPoint,
@@ -156,6 +165,7 @@ pub struct SwipeInfo {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TouchEvent {
     TouchOnePoint(TouchPoint),
     TouchTwoPoint(TouchPoint, TouchPoint),
@@ -167,6 +177,7 @@ pub enum TouchEvent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, FromPrimitive, IntoPrimitive, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum DeviceMode {
     /// Working mode
     #[default]
@@ -178,6 +189,7 @@ pub enum DeviceMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum TouchType {
     Press = 0b00,
     Release = 0b01,
@@ -200,6 +212,7 @@ impl From<u8> for TouchType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RawTouchEvent {
     /// Device mode
     pub device_mode: DeviceMode,
@@ -252,6 +265,7 @@ impl RawTouchEvent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GestureParams {
     minimum_angle: u8,
     offset_left_right: u8,
@@ -322,6 +336,7 @@ enum Reg {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GestureId {
     #[default]
     NoGesture = 0x00,
@@ -337,6 +352,7 @@ pub enum GestureId {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, IntoPrimitive, FromPrimitive)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ChipId {
     #[default]
     Unknown,
