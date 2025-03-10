@@ -1,6 +1,6 @@
 [package]
 name = "ft6x36"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 categories = ["embedded", "hardware-support"]
 description = "Rust driver for Ft6x36 touch screen"
@@ -12,9 +12,11 @@ readme = "README.md"
 default = ["event_process"]
 event_process = []
 serde = ["event_process", "dep:serde", "serde?/derive"]
+defmt = ["dep:defmt"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 embedded-hal = { version = "1.0.0" }
 num_enum = { version = "0.7.0", default-features = false }
 serde = { version = "1.0.193", optional = true, default-features = false }
+defmt = { version = "0.3.10", optional = true }
